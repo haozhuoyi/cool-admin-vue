@@ -29,16 +29,22 @@
 </template>
 
 <script lang="ts" setup>
-defineOptions({
-	name: "dingdan-son",
-});
-
+import { reactive } from 'vue';
 import { useCrud, useTable, useUpsert, useSearch } from "@cool-vue/crud";
 import { useCool } from "/@/cool";
 import { useI18n } from "vue-i18n";
 
 const { service } = useCool();
 const { t } = useI18n();
+
+// 状态选项
+const options = reactive({
+	status: [
+		{ label: '未还款', value: 0 },
+		{ label: '已逾期', value: 1 },
+		{ label: '已还款', value: 2 }
+	]
+});
 
 // cl-upsert
 const Upsert = useUpsert({
@@ -64,8 +70,14 @@ const Upsert = useUpsert({
 		{
 			label: t("订单状态"),
 			prop: "status",
-			component: { name: "el-input", props: { clearable: true } },
-			span: 12,
+			component: { 
+				name: "cl-select", 
+				props: { 
+					clearable: true,
+					options: options.status
+				}
+			},
+			span: 12
 		},
 	],
 });
@@ -77,7 +89,15 @@ const Table = useTable({
 		{ label: t("订单ID"), prop: "dingdanId", minWidth: 120 },
 		{ label: t("金额"), prop: "jine", minWidth: 120 },
 		{ label: t("还款日期"), prop: "datetime", minWidth: 120 },
-		{ label: t("订单状态"), prop: "status", minWidth: 120 },
+		{ 
+			label: t("订单状态"), 
+			prop: "status", 
+			minWidth: 120,
+			formatter: (row) => {
+				const item = options.status.find(e => e.value === row.status);
+				return item ? item.label : '-';
+			}
+		},
 		{
 			label: t("创建时间"),
 			prop: "createTime",

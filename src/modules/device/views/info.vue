@@ -29,6 +29,8 @@
 </template>
 
 <script lang="ts" setup>
+import { reactive, onMounted } from 'vue';
+
 defineOptions({
 	name: "device-info",
 });
@@ -39,6 +41,66 @@ import { useI18n } from "vue-i18n";
 
 const { service } = useCool();
 const { t } = useI18n();
+
+// 下拉选项
+const options = reactive({
+	zuhu: [] as any[],
+	dingdan: [] as any[],
+});
+
+// 获取租户列表
+async function getZuhuList() {
+	try {
+		const res = await service.zuhu.info.page({
+			page: 1,
+			size: 1000
+		});
+		
+		if (res && Array.isArray(res.list)) {
+			options.zuhu = res.list.map((e: any) => ({
+				label: e.name,
+				value: String(e.id)
+			}));
+			return true;
+		} else {
+			console.warn('获取租户列表数据格式异常：', res);
+			return false;
+		}
+	} catch (err) {
+		console.error('获取租户列表失败：', err);
+		return false;
+	}
+}
+
+// 获取订单列表
+async function getDingdanList() {
+	try {
+		const res = await service.dingdan.info.page({
+			page: 1,
+			size: 1000
+		});
+		
+		if (res && Array.isArray(res.list)) {
+			options.dingdan = res.list.map((e: any) => ({
+				label: `订单${e.id}`,
+				value: String(e.id)
+			}));
+			return true;
+		} else {
+			console.warn('获取订单列表数据格式异常：', res);
+			return false;
+		}
+	} catch (err) {
+		console.error('获取订单列表失败：', err);
+		return false;
+	}
+}
+
+// 页面加载时获取列表数据
+onMounted(() => {
+	getZuhuList();
+	getDingdanList();
+});
 
 // cl-upsert
 const Upsert = useUpsert({
@@ -58,26 +120,140 @@ const Upsert = useUpsert({
 		{
 			label: t("选择租户信息"),
 			prop: "zuhuId",
-			component: { name: "el-input", props: { clearable: true } },
+			hook: {
+				bind: [(value) => {
+					if (!value) return '';
+					try {
+						let ids = value;
+						if (typeof ids === 'string') {
+							ids = JSON.parse(ids || "[]");
+						}
+						if (!Array.isArray(ids)) {
+							ids = [];
+						}
+						return options.zuhu
+							.filter(e => ids.includes(e.value) || ids.includes(String(e.value)))
+							.map(e => e.label)
+							.join("、") || "";
+					} catch (e) {
+						console.warn('解析zuhuId失败:', e);
+						return value;
+					}
+				}],
+				submit: [(value) => {
+					return '[]';
+				}]
+			},
+			component: { 
+				name: "el-input", 
+				props: { 
+					clearable: true,
+					disabled: true,
+					placeholder: "不可手动选择"
+				} 
+			},
 			span: 12,
 		},
 		{
 			label: t("选择订单编号"),
 			prop: "dingdanId",
-			component: { name: "el-input", props: { clearable: true } },
+			hook: {
+				bind: [(value) => {
+					if (!value) return '';
+					try {
+						let ids = value;
+						if (typeof ids === 'string') {
+							ids = JSON.parse(ids || "[]");
+						}
+						if (!Array.isArray(ids)) {
+							ids = [];
+						}
+						return options.dingdan
+							.filter(e => ids.includes(e.value) || ids.includes(String(e.value)))
+							.map(e => e.label)
+							.join("、") || "";
+					} catch (e) {
+						console.warn('解析dingdanId失败:', e);
+						return value;
+					}
+				}],
+				submit: [(value) => {
+					return '[]';
+				}]
+			},
+			component: { 
+				name: "el-input", 
+				props: { 
+					clearable: true,
+					disabled: true,
+					placeholder: "不可手动选择"
+				} 
+			},
 			span: 12,
 		},
 	],
+	// 添加 onOpen 钩子，在表单打开时获取最新列表
+	async onOpen(data?: any) {
+		await Promise.all([
+			getZuhuList(),
+			getDingdanList()
+		]);
+	}
 });
 
 // cl-table
 const Table = useTable({
 	columns: [
 		{ type: "selection" },
+		{ label: t("ID"), prop: "id", minWidth: 80 },
 		{ label: t("设备编号"), prop: "number", minWidth: 120 },
 		{ label: t("设备名称"), prop: "name", minWidth: 120 },
-		{ label: t("租户信息"), prop: "zuhuId", minWidth: 120 },
-		{ label: t("订单编号"), prop: "dingdanId", minWidth: 120 },
+		{ 
+			label: t("租户信息"), 
+			prop: "zuhuId", 
+			minWidth: 120,
+			formatter: (row) => {
+				try {
+					let ids = row.zuhuId;
+					if (typeof ids === 'string') {
+						ids = JSON.parse(ids || "[]");
+					}
+					if (!Array.isArray(ids)) {
+						ids = [];
+					}
+					return options.zuhu
+						.filter(e => ids.includes(e.value) || ids.includes(String(e.value)))
+						.map(e => e.label)
+						.join("、") || "-";
+				} catch(err) {
+					console.warn("格式化zuhuId失败:", err);
+					return "-";
+				}
+			}
+		},
+		{ 
+			label: t("订单编号"), 
+			prop: "dingdanId", 
+			minWidth: 120,
+			formatter: (row) => {
+				try {
+					let ids = row.dingdanId;
+					if (typeof ids === 'string') {
+						ids = JSON.parse(ids || "[]");
+					}
+					if (!Array.isArray(ids)) {
+						ids = [];
+					}
+					return options.dingdan
+						.filter(e => ids.includes(e.value) || ids.includes(String(e.value)))
+						.map(e => e.label)
+						.join("、") || "-";
+				} catch(err) {
+					console.warn("格式化dingdanId失败:", err);
+					return "-";
+				}
+			}
+		},
 		{
 			label: t("创建时间"),
 			prop: "createTime",

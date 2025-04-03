@@ -68,6 +68,7 @@ const Upsert = useUpsert({
 const Table = useTable({
 	columns: [
 		{ type: "selection" },
+		{ label: t("ID"), prop: "id", minWidth: 80 },
 		{ label: t("渠道名称"), prop: "name", minWidth: 120 },
 		{ label: t("渠道信息"), prop: "info", minWidth: 120 },
 		{ label: t("备注"), prop: "note", minWidth: 120 },

@@ -29,6 +29,10 @@
 			<template #slot-qudao="{ scope }">
 				<cl-select v-model="scope.qudaoIds" :options="options.qudao" multiple clearable />
 			</template>
+			<!-- 添加租户选择插槽 -->
+			<template #slot-zuhu="{ scope }">
+				<cl-select v-model="scope.zuhuIds" :options="options.zuhu" multiple clearable />
+			</template>
 		</cl-upsert>
 	</cl-crud>
 </template>
@@ -48,7 +52,8 @@ const { t } = useI18n();
 
 // 渠道列表
 const options = reactive({
-	qudao: [] as any[]
+	qudao: [] as any[],
+	zuhu: [] as any[] // 新增租户选项数组
 });
 
 // 获取渠道列表
@@ -78,9 +83,36 @@ async function getQudaoList() {
 	}
 }
 
+// 获取租户列表
+async function getZuhuList() {
+	try {
+		const res = await service.zuhu.info.page({
+			page: 1,
+			size: 1000
+		});
+		
+		if (res && Array.isArray(res.list)) {
+			options.zuhu = res.list.map((e: any) => ({
+				label: e.name,
+				value: String(e.id)
+			}));
+			
+			console.log('租户列表更新成功：', options.zuhu);
+			return true;
+		} else {
+			console.warn('获取租户列表数据格式异常：', res);
+			return false;
+		}
+	} catch (err) {
+		console.error('获取租户列表失败：', err);
+		return false;
+	}
+}
+
 // 页面加载时获取渠道列表
 onMounted(() => {
 	getQudaoList();
+	getZuhuList(); // 添加获取租户列表
 });
 
 // 创建一个计算属性，用于包装渠道选项
@@ -129,7 +161,32 @@ const Upsert = useUpsert({
 		{
 			label: t("选择名下租户"),
 			prop: "zuhuIds",
-			component: { name: "el-input", props: { clearable: true } },
+			hook: {
+				bind: [(value) => {
+					// 如果值已经是数组就直接使用，否则尝试解析JSON
+					if (Array.isArray(value)) {
+						// 确保数组中的值是字符串
+						return value.map(id => String(id));
+					} else if (typeof value === 'string') {
+						try {
+							const parsed = JSON.parse(value);
+							// 确保解析后的数组中值是字符串
+							return Array.isArray(parsed) ? parsed.map(id => String(id)) : [];
+						} catch (e) {
+							console.warn('解析qudaoIds失败:', e);
+							return [];
+						}
+					}
+					return value ? [String(value)] : [];
+				}],
+				submit: [(value) => {
+					// 确保提交的始终是数组格式
+					return Array.isArray(value) ? value : [];
+				}]
+			},
+			component: { 
+				name: "slot-zuhu"
+			},
 			span: 12,
 		},
 		{
@@ -147,11 +204,16 @@ const Upsert = useUpsert({
 	],
 	// 添加 onOpen 钩子，在表单打开时获取最新的渠道列表
 	async onOpen(data?: any) {
-		await getQudaoList();
+		await Promise.all([
+			getQudaoList(),
+			getZuhuList()
+		]);
 		console.log('表单打开，数据:', data);
-		// 打印渠道数据，帮助调试
 		if (data && data.qudaoIds) {
 			console.log('渠道ID:', data.qudaoIds, '类型:', typeof data.qudaoIds);
+		}
+		if (data && data.zuhuIds) {
+			console.log('租户ID:', data.zuhuIds, '类型:', typeof data.zuhuIds);
 		}
 	}
 });
@@ -160,6 +222,7 @@ const Upsert = useUpsert({
 const Table = useTable({
 	columns: [
 		{ type: "selection" },
+		{ label: t("ID"), prop: "id", minWidth: 80 },
 		{ label: t("名称"), prop: "name", minWidth: 120 },
 		{ 
 			label: t("关联渠道"), 
@@ -190,7 +253,35 @@ const Table = useTable({
 				}
 			}
 		},
-		{ label: t("名下租户"), prop: "zuhuIds", minWidth: 120 },
+		{ 
+			label: t("名下租户"), 
+			prop: "zuhuIds",
+			minWidth: 120,
+			formatter: (row) => {
+				try {
+					// 处理可能是数组或字符串的情况
+					let ids = row.zuhuIds;
+					
+					// 如果是字符串，尝试解析
+					if (typeof ids === 'string') {
+						ids = JSON.parse(ids || "[]");
+					}
+					
+					// 确保是数组
+					if (!Array.isArray(ids)) {
+						ids = [];
+					}
+					
+					return options.zuhu
+						.filter(e => ids.includes(e.value) || ids.includes(String(e.value)))
+						.map(e => e.label)
+						.join("、") || "-";
+				} catch(err) {
+					console.warn("格式化zuhuIds失败:", err);
+					return "-";
+				}
+			}
+		},
 		{ label: t("联系方式"), prop: "phone", minWidth: 120 },
 		{ label: t("备注"), prop: "note", minWidth: 120 },
 		{
